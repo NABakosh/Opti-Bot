@@ -1,13 +1,23 @@
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
 from app.core.redis import redis_client
 from app.crud import conversation as conversation_crud
 from app.crud import knowledge_base as knowledge_base_crud
-from app.db.models import KnowledgeBase
+from app.db.models import Conversation, KnowledgeBase
 from app.db.session import async_session_maker
 from app.services.cerebras import cerebras_client
 from app.services.green_api import green_api_client
 
-SYSTEM_PROMPT = "Ты — ассистент, который отвечает пользователям в WhatsApp. Отвечай кратко и по делу."
+OFF_TOPIC_MARKER = "NOT_RELEVANT_ESCALATE"
+
+SYSTEM_PROMPT = (
+    "Ты — ассистент приёмной комиссии учреждения, отвечаешь пользователям в WhatsApp. "
+    "Отвечай кратко и по делу, строго в рамках тем поступления: документы, сроки, стоимость, "
+    "программы обучения, общежитие и т.п. "
+    f'Если вопрос не связан с деятельностью учреждения — ответь ровно одним словом "{OFF_TOPIC_MARKER}", '
+    "без пояснений и извинений."
+)
 
 ESCALATION_KEYWORDS = ["оператор", "человек", "менеджер", "живой человек"]
 ESCALATION_REPLY = "Передаю ваш вопрос оператору, он свяжется с вами в ближайшее время."
@@ -40,6 +50,13 @@ async def _notify_operator(chat_id: str, text: str) -> None:
 
     if settings.operator_chat_id:
         await green_api_client.send_message(settings.operator_chat_id, notification)
+
+
+async def _escalate(db: AsyncSession, conversation: Conversation, chat_id: str, text: str) -> None:
+    await conversation_crud.set_escalated(db, conversation, True)
+    await green_api_client.send_message(chat_id, ESCALATION_REPLY)
+    await conversation_crud.add_message(db, conversation, sender="bot", text=ESCALATION_REPLY)
+    await _notify_operator(chat_id, text)
 
 
 def _build_system_prompt(context_entries: list[KnowledgeBase]) -> str:
@@ -83,10 +100,7 @@ async def handle_incoming_message(chat_id: str, text: str, message_id: str | Non
             return  # диалог уже у оператора — бот молчит
 
         if _wants_operator(text):
-            await conversation_crud.set_escalated(db, conversation, True)
-            await green_api_client.send_message(chat_id, ESCALATION_REPLY)
-            await conversation_crud.add_message(db, conversation, sender="bot", text=ESCALATION_REPLY)
-            await _notify_operator(chat_id, text)
+            await _escalate(db, conversation, chat_id, text)
             return
 
         kb_match = await knowledge_base_crud.find_best_match(db, text)
@@ -95,6 +109,10 @@ async def handle_incoming_message(chat_id: str, text: str, message_id: str | Non
         else:
             context_entries = await knowledge_base_crud.top_matches(db, text)
             reply = await generate_reply(text, context_entries)
+
+            if OFF_TOPIC_MARKER in reply:
+                await _escalate(db, conversation, chat_id, text)
+                return
 
         await green_api_client.send_message(chat_id, reply)
         await conversation_crud.add_message(db, conversation, sender="bot", text=reply)
