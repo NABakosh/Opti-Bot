@@ -63,9 +63,6 @@ export function LandingPage() {
                   <ArrowRight />
                 </Link>
               </Button>
-              <Button asChild size="lg" variant="outline">
-                <Link to="/stats">Смотреть статистику</Link>
-              </Button>
             </div>
             <div className="flex flex-wrap gap-6 pt-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-2">

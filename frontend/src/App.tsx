@@ -4,7 +4,6 @@ import { Toaster } from "@/components/ui/sonner"
 import { WorkspaceProvider } from "@/context/WorkspaceContext"
 import { InboxPage } from "@/pages/Inbox"
 import { LandingPage } from "@/pages/Landing"
-import { StatsPage } from "@/pages/Stats"
 
 export default function App() {
   return (
@@ -13,7 +12,6 @@ export default function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<LandingPage />} />
-            <Route path="/stats" element={<StatsPage />} />
             <Route path="/inbox" element={<InboxPage />} />
           </Routes>
         </BrowserRouter>
