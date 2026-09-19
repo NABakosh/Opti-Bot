@@ -1,4 +1,5 @@
 from app.core.config import settings
+from app.core.redis import redis_client
 from app.crud import conversation as conversation_crud
 from app.crud import knowledge_base as knowledge_base_crud
 from app.db.models import KnowledgeBase
@@ -10,6 +11,16 @@ SYSTEM_PROMPT = "Ты — ассистент, который отвечает п
 
 ESCALATION_KEYWORDS = ["оператор", "человек", "менеджер", "живой человек"]
 ESCALATION_REPLY = "Передаю ваш вопрос оператору, он свяжется с вами в ближайшее время."
+
+DEDUP_TTL_SECONDS = 24 * 60 * 60
+
+
+async def _is_duplicate(message_id: str) -> bool:
+    """Green-API может прислать одно и то же сообщение дважды (ретрай вебхука, повторный
+    поллинг при сбое deleteNotification) — помечаем idMessage в Redis, чтобы не отвечать дважды."""
+    key = f"wa:seen-message:{message_id}"
+    is_new = await redis_client.set(key, "1", nx=True, ex=DEDUP_TTL_SECONDS)
+    return not is_new
 
 
 def _wants_operator(text: str) -> bool:
@@ -51,8 +62,11 @@ async def generate_reply(user_message: str, context_entries: list[KnowledgeBase]
     return response["choices"][0]["message"]["content"]
 
 
-async def handle_incoming_message(chat_id: str, text: str) -> None:
+async def handle_incoming_message(chat_id: str, text: str, message_id: str | None = None) -> None:
     """Обрабатывает входящее сообщение: сохраняет историю, проверяет эскалацию, отвечает."""
+    if message_id and await _is_duplicate(message_id):
+        return
+
     async with async_session_maker() as db:
         conversation = await conversation_crud.get_or_create_conversation(db, chat_id)
         await conversation_crud.add_message(db, conversation, sender="user", text=text)

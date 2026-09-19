@@ -11,7 +11,7 @@ class CerebrasClient:
     def __init__(self) -> None:
         self._api_key = settings.cerebras_api_key
 
-    async def chat(self, messages: list[dict], model: str = "llama3.1-8b") -> dict:
+    async def chat(self, messages: list[dict], model: str = "qwen-3.8-27b") -> dict:
         headers = {"Authorization": f"Bearer {self._api_key}"}
         payload = {"model": model, "messages": messages}
 

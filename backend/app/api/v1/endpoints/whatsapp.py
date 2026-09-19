@@ -18,6 +18,6 @@ async def whatsapp_webhook(
     text = notification.messageData.text if notification.messageData else None
 
     if chat_id and text:
-        background_tasks.add_task(handle_incoming_message, chat_id, text)
+        background_tasks.add_task(handle_incoming_message, chat_id, text, notification.idMessage)
 
     return {"status": "accepted"}

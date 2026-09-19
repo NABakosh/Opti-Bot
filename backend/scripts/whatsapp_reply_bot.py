@@ -35,13 +35,14 @@ async def process_next_notification() -> bool:
             sender_data = body.get("senderData") or {}
             message_data = body.get("messageData") or {}
             chat_id = sender_data.get("chatId")
+            message_id = body.get("idMessage")
             text = (message_data.get("textMessageData") or {}).get("textMessage") or (
                 message_data.get("extendedTextMessageData") or {}
             ).get("text")
 
             if chat_id and text:
                 print(f"[{chat_id}] {text}")
-                await handle_incoming_message(chat_id, text)
+                await handle_incoming_message(chat_id, text, message_id)
     finally:
         await green_api_client.delete_notification(receipt_id)
 
