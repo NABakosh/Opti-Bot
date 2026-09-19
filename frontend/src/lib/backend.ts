@@ -27,8 +27,10 @@ type BackendConversationDetail = BackendConversation & {
 const INSTITUTION_NAME = "Opti-Bot"
 const VISITOR_ROLE = "Клиент WhatsApp"
 
-function visitorName(chatId: string) {
-  return chatId.replace(/@c\.us$/, "")
+// Номер телефона в интерфейс не выводим (не палим контакт) — показываем нейтральную метку
+// по id диалога вместо разбора chat_id.
+function visitorName(conversationId: string) {
+  return `Клиент ${conversationId}`
 }
 
 function mapAuthor(sender: BackendSender): ChatMessage["author"] {
@@ -61,7 +63,7 @@ export function mapConversationDetail(raw: BackendConversationDetail): Conversat
   const id = String(raw.id)
   return {
     id,
-    visitorName: visitorName(raw.chat_id),
+    visitorName: visitorName(id),
     visitorRole: VISITOR_ROLE,
     institution: INSTITUTION_NAME,
     institutionKind: "private",
