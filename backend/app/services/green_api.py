@@ -21,5 +21,24 @@ class GreenAPIClient:
             response.raise_for_status()
             return response.json()
 
+    async def receive_notification(self) -> dict | None:
+        """Забирает старейшее уведомление из очереди Green-API (для поллинга без вебхука)."""
+        url = f"{self._base_url}/receiveNotification/{self._token}"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            return data or None
+
+    async def delete_notification(self, receipt_id: int) -> bool:
+        """Удаляет обработанное уведомление из очереди, чтобы не получить его повторно."""
+        url = f"{self._base_url}/deleteNotification/{self._token}/{receipt_id}"
+
+        async with httpx.AsyncClient() as client:
+            response = await client.delete(url)
+            response.raise_for_status()
+            return bool(response.json().get("result"))
+
 
 green_api_client = GreenAPIClient()

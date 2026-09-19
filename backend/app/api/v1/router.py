@@ -1,7 +1,7 @@
 from fastapi import APIRouter
 
+from app.api.v1.endpoints import whatsapp
+
 api_router = APIRouter()
 
-# Пример подключения роутов эндпоинтов:
-# from app.api.v1.endpoints import chat
-# api_router.include_router(chat.router, prefix="/chat", tags=["chat"])
+api_router.include_router(whatsapp.router, prefix="/whatsapp", tags=["whatsapp"])
