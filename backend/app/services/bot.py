@@ -1,5 +1,6 @@
 from app.crud import conversation as conversation_crud
 from app.crud import knowledge_base as knowledge_base_crud
+from app.db.models import KnowledgeBase
 from app.db.session import async_session_maker
 from app.services.cerebras import cerebras_client
 from app.services.green_api import green_api_client
@@ -15,10 +16,25 @@ def _wants_operator(text: str) -> bool:
     return any(keyword in lowered for keyword in ESCALATION_KEYWORDS)
 
 
-async def generate_reply(user_message: str) -> str:
+def _build_system_prompt(context_entries: list[KnowledgeBase]) -> str:
+    if not context_entries:
+        return SYSTEM_PROMPT
+
+    context_text = "\n".join(
+        f"- Вопрос: {entry.question}\n  Ответ: {entry.answer}" for entry in context_entries
+    )
+    return (
+        f"{SYSTEM_PROMPT}\n\n"
+        "Вот похожие вопросы и ответы из базы знаний учреждения. Используй их как подсказку, "
+        "если они релевантны вопросу пользователя, но не обязан пересказывать дословно:\n"
+        f"{context_text}"
+    )
+
+
+async def generate_reply(user_message: str, context_entries: list[KnowledgeBase] | None = None) -> str:
     response = await cerebras_client.chat(
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": _build_system_prompt(context_entries or [])},
             {"role": "user", "content": user_message},
         ]
     )
@@ -41,7 +57,11 @@ async def handle_incoming_message(chat_id: str, text: str) -> None:
             return
 
         kb_match = await knowledge_base_crud.find_best_match(db, text)
-        reply = kb_match.answer if kb_match else await generate_reply(text)
+        if kb_match:
+            reply = kb_match.answer
+        else:
+            context_entries = await knowledge_base_crud.top_matches(db, text)
+            reply = await generate_reply(text, context_entries)
 
         await green_api_client.send_message(chat_id, reply)
         await conversation_crud.add_message(db, conversation, sender="bot", text=reply)

@@ -7,6 +7,12 @@ from app.db.models import KnowledgeBase
 from app.schemas.knowledge_base import KnowledgeBaseCreate, KnowledgeBaseUpdate
 
 MATCH_THRESHOLD = 0.6
+CONTEXT_MIN_SCORE = 0.2
+CONTEXT_LIMIT = 3
+
+
+def _score(question: str, entry: KnowledgeBase) -> float:
+    return SequenceMatcher(None, question.strip().lower(), entry.question.strip().lower()).ratio()
 
 
 async def list_entries(db: AsyncSession) -> list[KnowledgeBase]:
@@ -20,17 +26,19 @@ async def find_best_match(db: AsyncSession, question: str) -> KnowledgeBase | No
     if not entries:
         return None
 
-    normalized = question.strip().lower()
-    best_entry = None
-    best_score = 0.0
+    best_entry = max(entries, key=lambda entry: _score(question, entry))
+    return best_entry if _score(question, best_entry) >= MATCH_THRESHOLD else None
 
-    for entry in entries:
-        score = SequenceMatcher(None, normalized, entry.question.strip().lower()).ratio()
-        if score > best_score:
-            best_score = score
-            best_entry = entry
 
-    return best_entry if best_score >= MATCH_THRESHOLD else None
+async def top_matches(db: AsyncSession, question: str, limit: int = CONTEXT_LIMIT) -> list[KnowledgeBase]:
+    """Топ-N похожих записей для RAG-контекста в промпте ИИ, даже если точного совпадения нет."""
+    entries = await list_entries(db)
+    scored = sorted(
+        ((_score(question, entry), entry) for entry in entries),
+        key=lambda pair: pair[0],
+        reverse=True,
+    )
+    return [entry for score, entry in scored[:limit] if score >= CONTEXT_MIN_SCORE]
 
 
 async def get_entry(db: AsyncSession, entry_id: int) -> KnowledgeBase | None:
