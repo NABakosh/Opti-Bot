@@ -9,7 +9,8 @@ import {
   type ReactNode,
 } from "react"
 import { toast } from "sonner"
-import { api, wsUrl } from "@/lib/api"
+import { rootApi } from "@/lib/api"
+import { escalateConversation, fetchConversations, replyToConversation, resolveConversation } from "@/lib/backend"
 import {
   appendMessage,
   autoBotReply,
@@ -69,12 +70,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   )
 
   useEffect(() => {
-    let socket: WebSocket | null = null
     let cancelled = false
     let demoTimer: number | undefined
+    let pollTimer: number | undefined
 
     const startDemo = () => {
-      if (cancelled) return
+      if (cancelled || demoTimer !== undefined) return
       setConnection("demo")
       demoTimer = window.setInterval(() => {
         const list = conversationsRef.current
@@ -101,39 +102,25 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       }, 14000)
     }
 
+    // Настоящего WebSocket у бэкенда нет (см. API.md) — обновляем список диалогов поллингом.
+    // Если бэкенд недоступен, откатываемся на демо-симуляцию, как и раньше.
+    const pollConversations = async () => {
+      try {
+        const list = await fetchConversations()
+        if (cancelled) return
+        setConversations(list)
+        setConnection("live")
+      } catch {
+        if (!cancelled) startDemo()
+      }
+    }
+
     const connect = async () => {
       try {
-        await api.get("/health")
+        await rootApi.get("/health")
         if (cancelled) return
-        socket = new WebSocket(wsUrl())
-        socket.onopen = () => {
-          if (!cancelled) setConnection("live")
-        }
-        socket.onmessage = (event) => {
-          try {
-            const payload = JSON.parse(event.data) as {
-              type?: string
-              conversationId?: string
-              text?: string
-              conversation?: Conversation
-            }
-            if (payload.type === "conversation" && payload.conversation) {
-              setConversations((current) => [payload.conversation!, ...current])
-              return
-            }
-            if (payload.conversationId && payload.text) {
-              applyIncoming(payload.conversationId, payload.text)
-            }
-          } catch {
-            /* ignore malformed frames */
-          }
-        }
-        socket.onerror = () => {
-          socket?.close()
-        }
-        socket.onclose = () => {
-          if (!cancelled) startDemo()
-        }
+        await pollConversations()
+        pollTimer = window.setInterval(pollConversations, 5000)
       } catch {
         startDemo()
       }
@@ -143,7 +130,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
 
     return () => {
       cancelled = true
-      socket?.close()
+      if (pollTimer) window.clearInterval(pollTimer)
       if (demoTimer) window.clearInterval(demoTimer)
     }
   }, [applyIncoming])
@@ -151,6 +138,17 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const sendOperatorMessage = useCallback(async (conversationId: string, text: string) => {
     const trimmed = text.trim()
     if (!trimmed) return
+
+    try {
+      const updated = await replyToConversation(conversationId, trimmed)
+      setConversations((current) =>
+        current.map((item) => (item.id === conversationId ? updated : item)),
+      )
+      setStats((current) => bumpDaily(current, "operator"))
+      return
+    } catch {
+      // бэкенд недоступен (или демо-режим) — симулируем локально, как раньше
+    }
 
     setConversations((current) =>
       appendMessage(current, conversationId, {
@@ -161,34 +159,30 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     )
     setStats((current) => bumpDaily(current, "operator"))
 
-    try {
-      await api.post(`/chats/${conversationId}/messages`, { text: trimmed, author: "operator" })
-    } catch {
-      const conversation = conversationsRef.current.find((item) => item.id === conversationId)
-      if (conversation?.status === "bot") {
-        const reply = autoBotReply(trimmed)
-        window.setTimeout(() => {
-          setConversations((current) =>
-            appendMessage(current, conversationId, {
-              author: "bot",
-              stage: reply.stage,
-              text: reply.text,
-            }),
-          )
-          setStats((current) => {
-            const next = bumpDaily(current, reply.stage)
-            if (reply.stage === "operator") {
-              return { ...next, operatorTransfers: next.operatorTransfers + 1 }
-            }
-            return next
-          })
+    const conversation = conversationsRef.current.find((item) => item.id === conversationId)
+    if (conversation?.status === "bot") {
+      const reply = autoBotReply(trimmed)
+      window.setTimeout(() => {
+        setConversations((current) =>
+          appendMessage(current, conversationId, {
+            author: "bot",
+            stage: reply.stage,
+            text: reply.text,
+          }),
+        )
+        setStats((current) => {
+          const next = bumpDaily(current, reply.stage)
           if (reply.stage === "operator") {
-            setConversations((current) =>
-              setConversationStatus(current, conversationId, "waiting", "operator"),
-            )
+            return { ...next, operatorTransfers: next.operatorTransfers + 1 }
           }
-        }, 700)
-      }
+          return next
+        })
+        if (reply.stage === "operator") {
+          setConversations((current) =>
+            setConversationStatus(current, conversationId, "waiting", "operator"),
+          )
+        }
+      }, 700)
     }
   }, [])
 
@@ -201,10 +195,16 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       operatorTransfers: current.operatorTransfers + 1,
     }))
     toast.success("Диалог у оператора")
+    void escalateConversation(conversationId).catch(() => {
+      /* демо-режим или бэкенд недоступен — локальное состояние уже обновлено */
+    })
   }, [])
 
   const resolveChat = useCallback((conversationId: string) => {
     setConversations((current) => setConversationStatus(current, conversationId, "resolved"))
+    void resolveConversation(conversationId).catch(() => {
+      /* демо-режим или бэкенд недоступен — локальное состояние уже обновлено */
+    })
   }, [])
 
   const resetDemo = useCallback(() => {
