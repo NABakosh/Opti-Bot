@@ -15,6 +15,11 @@ ESCALATION_REPLY = "Передаю ваш вопрос оператору, он 
 DEDUP_TTL_SECONDS = 24 * 60 * 60
 
 
+def _is_allowed(chat_id: str) -> bool:
+    allowed = {c.strip() for c in settings.allowed_chat_ids.split(",") if c.strip()}
+    return not allowed or chat_id in allowed
+
+
 async def _is_duplicate(message_id: str) -> bool:
     """Green-API может прислать одно и то же сообщение дважды (ретрай вебхука, повторный
     поллинг при сбое deleteNotification) — помечаем idMessage в Redis, чтобы не отвечать дважды."""
@@ -64,6 +69,9 @@ async def generate_reply(user_message: str, context_entries: list[KnowledgeBase]
 
 async def handle_incoming_message(chat_id: str, text: str, message_id: str | None = None) -> None:
     """Обрабатывает входящее сообщение: сохраняет историю, проверяет эскалацию, отвечает."""
+    if not _is_allowed(chat_id):
+        return  # номер не в allowlist — не тратим Cerebras/БД на заведомо неотправляемый ответ
+
     if message_id and await _is_duplicate(message_id):
         return
 
