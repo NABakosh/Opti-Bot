@@ -28,8 +28,9 @@ class GreenAPIClient:
         async with httpx.AsyncClient() as client:
             response = await client.get(url, timeout=30)
             response.raise_for_status()
-            data = response.json()
-            return data or None
+            if not response.text:
+                return None  # пустое тело — в очереди нет уведомлений
+            return response.json()
 
     async def delete_notification(self, receipt_id: int) -> bool:
         """Удаляет обработанное уведомление из очереди, чтобы не получить его повторно."""
