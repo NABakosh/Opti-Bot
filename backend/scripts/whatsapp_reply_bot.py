@@ -52,7 +52,11 @@ async def process_next_notification() -> bool:
 async def main() -> None:
     print("WhatsApp reply bot запущен. Для остановки — Ctrl+C.")
     while True:
-        processed = await process_next_notification()
+        try:
+            processed = await process_next_notification()
+        except Exception as exc:  # noqa: BLE001 — сбой одного опроса не должен убивать весь поллер
+            print(f"[ошибка опроса] {exc}")
+            processed = False
         if not processed:
             await asyncio.sleep(POLL_INTERVAL_SECONDS)
 
