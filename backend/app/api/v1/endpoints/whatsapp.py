@@ -1,7 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks
 
 from app.schemas.whatsapp import IncomingMessageNotification
-from app.services.bot import handle_incoming_text
+from app.services.bot import handle_incoming_message
 
 router = APIRouter()
 
@@ -18,6 +18,6 @@ async def whatsapp_webhook(
     text = notification.messageData.text if notification.messageData else None
 
     if chat_id and text:
-        background_tasks.add_task(handle_incoming_text, chat_id, text)
+        background_tasks.add_task(handle_incoming_message, chat_id, text)
 
     return {"status": "accepted"}

@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.services.bot import handle_incoming_text  # noqa: E402
+from app.services.bot import handle_incoming_message  # noqa: E402
 from app.services.green_api import green_api_client  # noqa: E402
 
 POLL_INTERVAL_SECONDS = 2
@@ -41,8 +41,7 @@ async def process_next_notification() -> bool:
 
             if chat_id and text:
                 print(f"[{chat_id}] {text}")
-                reply = await handle_incoming_text(chat_id, text)
-                print(f"-> {reply}")
+                await handle_incoming_message(chat_id, text)
     finally:
         await green_api_client.delete_notification(receipt_id)
 
