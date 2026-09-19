@@ -64,7 +64,7 @@ async def generate_reply(user_message: str, context_entries: list[KnowledgeBase]
             {"role": "user", "content": user_message},
         ]
     )
-    return response["choices"][0]["message"]["content"]
+    return response["choices"][0]["message"]["content"].strip()
 
 
 async def handle_incoming_message(chat_id: str, text: str, message_id: str | None = None) -> None:

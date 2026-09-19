@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { Check, Radio, Send, UserRound } from "lucide-react"
 import { SiteHeader } from "@/components/layout/SiteHeader"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
@@ -64,6 +64,12 @@ export function InboxPage() {
   }, [conversations, query])
 
   const active = conversations.find((item) => item.id === activeId) ?? filtered[0] ?? null
+
+  const bottomRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" })
+  }, [active?.id, active?.messages.length])
 
   const onSend = async () => {
     if (!active) return
@@ -187,6 +193,7 @@ export function InboxPage() {
                     </div>
                   )
                 })}
+                <div ref={bottomRef} />
               </div>
             </ScrollArea>
 
