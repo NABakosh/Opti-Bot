@@ -15,15 +15,15 @@ FastAPI · PostgreSQL · Redis · Green-API (WhatsApp) · Cerebras (LLM)
 - Вебхук `POST /api/v1/whatsapp/webhook` + скрипт поллинга `scripts/whatsapp_reply_bot.py`
 - `docker-compose.yml` (Postgres + Redis), Alembic настроен
 
-Сейчас это прямой проброс "сообщение → Cerebras → ответ". Ниже — минимум, чтобы собрать демо трёх этапов.
+Этап 1 подключён: "сообщение → поиск в базе знаний → совпадение? ответ оттуда : Cerebras". Ниже — что осталось до демо всех трёх этапов.
 
 ---
 
 ## Этап 1 — База знаний
 
-- [ ] Таблица `knowledge_base` (question, answer) + миграция
-- [ ] Простой поиск: fuzzy/keyword-match вопроса по таблице (без embeddings/pgvector — не хватит времени)
-- [ ] Если совпадение выше порога — отвечаем сразу из базы, без Cerebras
+- [x] Таблица `knowledge_base` (question, answer) + миграция
+- [x] Простой поиск: fuzzy-match вопроса по таблице (`difflib`, без embeddings/pgvector)
+- [x] Если совпадение выше порога — отвечаем сразу из базы, без Cerebras
 
 ## Этап 2 — Ответ ИИ
 

@@ -1,4 +1,5 @@
 from app.crud import conversation as conversation_crud
+from app.crud import knowledge_base as knowledge_base_crud
 from app.db.session import async_session_maker
 from app.services.cerebras import cerebras_client
 from app.services.green_api import green_api_client
@@ -39,6 +40,8 @@ async def handle_incoming_message(chat_id: str, text: str) -> None:
             await conversation_crud.add_message(db, conversation, sender="bot", text=ESCALATION_REPLY)
             return
 
-        reply = await generate_reply(text)
+        kb_match = await knowledge_base_crud.find_best_match(db, text)
+        reply = kb_match.answer if kb_match else await generate_reply(text)
+
         await green_api_client.send_message(chat_id, reply)
         await conversation_crud.add_message(db, conversation, sender="bot", text=reply)

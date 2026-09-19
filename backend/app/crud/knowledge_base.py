@@ -1,13 +1,36 @@
+from difflib import SequenceMatcher
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import KnowledgeBase
 from app.schemas.knowledge_base import KnowledgeBaseCreate, KnowledgeBaseUpdate
 
+MATCH_THRESHOLD = 0.6
+
 
 async def list_entries(db: AsyncSession) -> list[KnowledgeBase]:
     result = await db.execute(select(KnowledgeBase).order_by(KnowledgeBase.id))
     return list(result.scalars().all())
+
+
+async def find_best_match(db: AsyncSession, question: str) -> KnowledgeBase | None:
+    """Ищет похожий вопрос в базе знаний. Без embeddings — просто сравнение строк."""
+    entries = await list_entries(db)
+    if not entries:
+        return None
+
+    normalized = question.strip().lower()
+    best_entry = None
+    best_score = 0.0
+
+    for entry in entries:
+        score = SequenceMatcher(None, normalized, entry.question.strip().lower()).ratio()
+        if score > best_score:
+            best_score = score
+            best_entry = entry
+
+    return best_entry if best_score >= MATCH_THRESHOLD else None
 
 
 async def get_entry(db: AsyncSession, entry_id: int) -> KnowledgeBase | None:
