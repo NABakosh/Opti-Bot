@@ -97,3 +97,46 @@ export async function escalateConversation(id: string): Promise<void> {
 export async function resolveConversation(id: string): Promise<void> {
   await api.post(`/conversations/${id}/resolve`)
 }
+
+// --- База знаний ---
+
+export type KnowledgeBaseEntry = {
+  id: number
+  question: string
+  answer: string
+  createdAt: string
+}
+
+type BackendKnowledgeBaseEntry = {
+  id: number
+  question: string
+  answer: string
+  created_at: string
+}
+
+function mapKnowledgeBaseEntry(raw: BackendKnowledgeBaseEntry): KnowledgeBaseEntry {
+  return { id: raw.id, question: raw.question, answer: raw.answer, createdAt: raw.created_at }
+}
+
+export async function fetchKnowledgeBase(): Promise<KnowledgeBaseEntry[]> {
+  const { data } = await api.get<BackendKnowledgeBaseEntry[]>("/knowledge-base/")
+  return data.map(mapKnowledgeBaseEntry)
+}
+
+export async function createKnowledgeBaseEntry(question: string, answer: string): Promise<KnowledgeBaseEntry> {
+  const { data } = await api.post<BackendKnowledgeBaseEntry>("/knowledge-base/", { question, answer })
+  return mapKnowledgeBaseEntry(data)
+}
+
+export async function updateKnowledgeBaseEntry(
+  id: number,
+  question: string,
+  answer: string,
+): Promise<KnowledgeBaseEntry> {
+  const { data } = await api.put<BackendKnowledgeBaseEntry>(`/knowledge-base/${id}`, { question, answer })
+  return mapKnowledgeBaseEntry(data)
+}
+
+export async function deleteKnowledgeBaseEntry(id: number): Promise<void> {
+  await api.delete(`/knowledge-base/${id}`)
+}

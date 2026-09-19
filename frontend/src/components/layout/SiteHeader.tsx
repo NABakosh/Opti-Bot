@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 const links = [
   { to: "/", label: "Продукт", end: true },
   { to: "/inbox", label: "Чаты" },
+  { to: "/knowledge-base", label: "База знаний" },
 ]
 
 export function SiteHeader({ solid = false }: { solid?: boolean }) {
