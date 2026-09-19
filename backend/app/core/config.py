@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     green_api_token: str = ""
     test_phone_number: str = ""
 
+    # Номер оператора для уведомлений об эскалации (формат: код страны + номер + @c.us)
+    operator_chat_id: str = ""
+
     # Cerebras
     cerebras_api_key: str = ""
 

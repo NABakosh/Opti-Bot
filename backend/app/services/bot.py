@@ -1,3 +1,4 @@
+from app.core.config import settings
 from app.crud import conversation as conversation_crud
 from app.crud import knowledge_base as knowledge_base_crud
 from app.db.models import KnowledgeBase
@@ -14,6 +15,15 @@ ESCALATION_REPLY = "Передаю ваш вопрос оператору, он 
 def _wants_operator(text: str) -> bool:
     lowered = text.lower()
     return any(keyword in lowered for keyword in ESCALATION_KEYWORDS)
+
+
+async def _notify_operator(chat_id: str, text: str) -> None:
+    """Уведомляет оператора о новом эскалированном диалоге. Без очереди и таймаутов — хакатон-MVP."""
+    notification = f"Требуется оператор.\nКлиент: {chat_id}\nСообщение: {text}"
+    print(f"[ESCALATION] {notification}")
+
+    if settings.operator_chat_id:
+        await green_api_client.send_message(settings.operator_chat_id, notification)
 
 
 def _build_system_prompt(context_entries: list[KnowledgeBase]) -> str:
@@ -54,6 +64,7 @@ async def handle_incoming_message(chat_id: str, text: str) -> None:
             await conversation_crud.set_escalated(db, conversation, True)
             await green_api_client.send_message(chat_id, ESCALATION_REPLY)
             await conversation_crud.add_message(db, conversation, sender="bot", text=ESCALATION_REPLY)
+            await _notify_operator(chat_id, text)
             return
 
         kb_match = await knowledge_base_crud.find_best_match(db, text)
